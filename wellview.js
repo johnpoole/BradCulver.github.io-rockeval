@@ -1,62 +1,50 @@
 // WellViewApp: Main namespace for the Kerogen data visualization application.
 var WellViewApp = {
   // --- Configuration & State ---
-  origin: [500, 375], // Initial origin for 3D projection.
-  scale: 5,           // Initial scale for 3D projection.
-  key: function(d) { return d.id; }, // Key function for D3 data joins.
-  startAngleX: 2.356194490192345,  // Initial rotation angle around X-axis (Math.PI / 4).
-  startAngleY: 0.7034435724342363, // Initial rotation angle around Y-axis (Math.PI / 8).
-  wellIDFocus: "None", // ID of the currently focused well, "None" for no focus.
+  origin: [500, 375],
+  scale: 5,
+  key: function(d) { return d.id; },
+  startAngleX: 2.356194490192345,
+  startAngleY: 0.7034435724342363,
+  wellIDFocus: "None",
 
-  svg: null, // Main SVG container, initialized in viz.setupSVG.
+  svg: null,
 
-  // Mouse state variables for drag interactions.
   mx: null, my: null, mouseX: null, mouseY: null,
 
-  // --- D3 Scales ---
   scales: {
-    ZScale: d3.scaleLinear().range([0, 100]), // Scale for Z-axis data.
-    XScale: d3.scaleLinear().range([0, 100]), // Scale for X-axis data.
-    YScale: d3.scaleLinear().range([0, 100]), // Scale for Y-axis data.
-    color: null // Color scale, initialized in viz.initD33DObjects based on config.colorList.
+    ZScale: d3.scaleLinear().range([0, 100]),
+    XScale: d3.scaleLinear().range([0, 100]),
+    YScale: d3.scaleLinear().range([0, 100]),
+    color: null
   },
 
-  // --- D3 3D Objects ---
-  // These objects handle the 3D projection and path generation.
   d3_3d: {
-    grid3d: null,   // For the 3D grid plane.
-    point3d: null,  // For 3D data points.
-    yScale3d: null  // For 3D axis lines (historically named yScale3d but used for all axes).
+    grid3d: null,
+    point3d: null,
+    yScale3d: null
   },
 
-  // --- Application Configuration ---
   config: {
-    zCategory: "hi",     // Default category for Z-axis.
-    xCategory: "oi",     // Default category for X-axis.
-    yCategory: "s2s3",   // Default category for Y-axis.
-    vCategory: "toc",    // Default category for color values.
-    // Default color palette for data points.
+    zCategory: "hi",
+    xCategory: "oi",
+    yCategory: "s2s3",
+    vCategory: "toc",
     colorList: ['#d53e4f', '#f46d43', '#fdae61', '#fee08b', '#ffffbf', '#e6f598', '#abdda4', '#66c2a5', '#3288bd']
   },
 
-  // --- Data Storage ---
   data: {
-    wells: [],    // Filtered well data used for the current visualization.
-    allWells: [], // All well data loaded from the CSV file.
-
-    // Loads data from "data.csv", populates dropdowns, and executes a callback.
+    wells: [],
+    allWells: [],
     load: function(callback) {
       d3.csv("data.csv", (error, loadedData) => {
         if (error) {
           console.error("Error loading data.csv:", error);
-          // Display a user-friendly error message on the page.
           d3.select('body').insert('div', ':first-child')
             .attr('class', 'error-message')
             .style('color', 'red')
             .style('padding', '10px')
             .html("<strong>Error:</strong> Could not load data.csv. Please check the file and console for details. The application may not function correctly.");
-
-          // Initialize with empty data to prevent further errors if possible, then callback.
           this.allWells = [];
           this.wells = [];
           if (callback) callback();
@@ -64,9 +52,8 @@ var WellViewApp = {
         }
 
         this.allWells = loadedData;
-        this.wells = this.allWells; // Initially, display all wells.
+        this.wells = this.allWells;
 
-        // Populate dropdown menus for category selection.
         if (this.allWells.length > 0 && this.allWells.columns) {
           const columns = this.allWells.columns;
           d3.select("#color").selectAll("option").data(columns).enter().append("option").text(d => d);
@@ -77,34 +64,27 @@ var WellViewApp = {
           console.warn("No data or columns found in data.csv. Dropdowns will not be populated.");
         }
 
-        // Populate dropdown for focusing on a specific well.
         var wellIDs = d3.map(this.allWells, d => d.wellID).keys();
-        wellIDs.unshift("None"); // Add "None" to show all wells.
+        wellIDs.unshift("None");
         d3.select("#well").selectAll("option").data(wellIDs).enter().append("option").text(d => d);
 
-        if (callback) callback(); // Execute the callback to continue application setup.
+        if (callback) callback();
       });
     },
-
-    // Exports the currently filtered well data to a CSV file named "export.csv".
     exportData: function() {
       if (!this.wells || this.wells.length === 0) {
         alert("No data available to export.");
         return;
       }
       let rows = [];
-      // Add header row using keys from the first data object.
       if (this.wells[0]) {
         rows.push(Object.keys(this.wells[0]));
       }
-
       this.wells.forEach(well => {
         rows.push(Object.values(well));
       });
       this.exportToCsv('export.csv', rows);
     },
-
-    // Helper function to convert an array of rows into a CSV string and trigger download.
     exportToCsv: function(filename, rows) {
       var processRow = function(row) {
         var finalVal = '';
@@ -113,24 +93,22 @@ var WellViewApp = {
           if (row[j] instanceof Date) {
             innerValue = row[j].toLocaleString();
           }
-          var result = innerValue.replace(/"/g, '""'); // Escape double quotes.
+          var result = innerValue.replace(/"/g, '""');
           if (result.search(/("|,|\n)/g) >= 0) {
-            result = '"' + result + '"'; // Enclose in double quotes if it contains special characters.
+            result = '"' + result + '"';
           }
           if (j > 0) finalVal += ',';
           finalVal += result;
         }
         return finalVal + '\n';
       };
-
       var csvFile = rows.map(processRow).join('');
-
       var blob = new Blob([csvFile], { type: 'text/csv;charset=utf-8;' });
-      if (navigator.msSaveBlob) { // IE 10+
+      if (navigator.msSaveBlob) {
         navigator.msSaveBlob(blob, filename);
       } else {
         var link = document.createElement("a");
-        if (link.download !== undefined) { // Modern browsers
+        if (link.download !== undefined) {
           var url = URL.createObjectURL(blob);
           link.setAttribute("href", url);
           link.setAttribute("download", filename);
@@ -143,14 +121,10 @@ var WellViewApp = {
     }
   },
 
-  // --- Visualization Module ---
   viz: {
-    // Object to hold data arrays prepared for D3 rendering (e.g., points, grid lines).
     dataForDrawing: {
       xGrid: [], scatter: [], yLine: [], xLine: [], zLine: []
     },
-
-    // Sets up the main SVG container and drag behavior.
     setupSVG: function() {
       WellViewApp.svg = d3.select('svg')
         .call(d3.drag()
@@ -159,78 +133,59 @@ var WellViewApp = {
           .on('end', WellViewApp.viz.dragEnd))
         .append('g');
     },
-
-    // Initializes the D3 3D objects used for projecting and drawing 3D elements.
     initD33DObjects: function() {
       var reversedColorList = [...WellViewApp.config.colorList].reverse();
       WellViewApp.scales.color = d3.scaleQuantize().range(reversedColorList);
-
-      // grid3d: Defines the 3D grid plane.
       WellViewApp.d3_3d.grid3d = d3._3d()
-        .shape('GRID', 10) // Defines a grid with 10 lines in each direction.
+        .shape('GRID', 10)
         .origin(WellViewApp.origin)
         .rotateY(WellViewApp.startAngleY)
         .rotateX(WellViewApp.startAngleX)
         .scale(WellViewApp.scale);
-
-      // point3d: Defines how individual data points (wells) are projected in 3D.
       WellViewApp.d3_3d.point3d = d3._3d()
-        .x(d => d.x).y(d => d.y).z(d => d.z) // Accessors for coordinates.
+        .x(d => d.x).y(d => d.y).z(d => d.z)
         .origin(WellViewApp.origin)
         .rotateY(WellViewApp.startAngleY)
         .rotateX(WellViewApp.startAngleX)
         .scale(WellViewApp.scale);
-
-      // yScale3d: Defines how lines (used for axes) are projected in 3D.
       WellViewApp.d3_3d.yScale3d = d3._3d()
-        .shape('LINE_STRIP') // Defines a series of connected line segments.
+        .shape('LINE_STRIP')
         .origin(WellViewApp.origin)
         .rotateY(WellViewApp.startAngleY)
         .rotateX(WellViewApp.startAngleX)
         .scale(WellViewApp.scale);
     },
-
-    // Processes and renders the 3D visualization data (grid, points, axes).
-    // `data` is an array containing pre-processed 3D data. `tt` is transition duration.
     processData: function(processedData, tt) {
-      // --- GRID Rendering ---
-      // Selects, binds data, and draws the 3D grid lines.
       var xGrid = WellViewApp.svg.selectAll('path.grid').data(processedData[0], WellViewApp.key);
-
-    xGrid
-      .enter()
-      .append('path')
-      .attr('class', '_3d grid')
-      .merge(xGrid)
-      .attr('stroke', 'black')
-      .attr('stroke-width', 0.3)
-      .attr('fill', function(d) {
-        return d.ccw ? '#717171' : 'lightgrey';
-      })
-      .attr('fill-opacity', 0.9)
-      .attr('d', WellViewApp.d3_3d.grid3d.draw); // Uses the grid3d object to draw the path
+      xGrid
+        .enter()
+        .append('path')
+        .attr('class', '_3d grid')
+        .merge(xGrid)
+        .attr('stroke', 'black')
+        .attr('stroke-width', 0.3)
+        .attr('fill', function(d) { return d.ccw ? '#717171' : 'lightgrey'; })
+        .attr('fill-opacity', 0.9)
+        .attr('d', WellViewApp.d3_3d.grid3d.draw);
       xGrid.exit().remove();
 
-      // --- POINTS Rendering ---
-      // Selects, binds data, and draws the 3D data points (wells) as circles.
       var points = WellViewApp.svg.selectAll('circle').data(processedData[1], WellViewApp.key);
       points.enter()
         .append('circle')
-        .attr('class', '_3d') // Class for D3 3D sorting.
-        .attr('opacity', 0)   // Start transparent for fade-in effect.
-        .attr('cx', WellViewApp.viz.posPointX) // X position from projection.
-        .attr('cy', WellViewApp.viz.posPointY) // Y position from projection.
+        .attr('class', '_3d')
+        .attr('opacity', 0)
+        .attr('cx', WellViewApp.viz.posPointX)
+        .attr('cy', WellViewApp.viz.posPointY)
         .merge(points)
-        .transition().duration(tt) // Apply transition for attribute changes.
-        .attr('r', d => (d.wellID === WellViewApp.wellIDFocus ? 6 : 3)) // Radius changes if well is focused.
-        .attr('stroke', d => d3.color(WellViewApp.scales.color(d.value)).darker(3)) // Border color from scale.
-        .attr('fill', d => WellViewApp.scales.color(d.value)) // Fill color from scale.
-        .attr('opacity', 1) // Fade in.
+        .transition().duration(tt)
+        .attr('r', d => (d.wellID === WellViewApp.wellIDFocus ? 6 : 3))
+        .attr('stroke', d => d3.color(WellViewApp.scales.color(d.value)).darker(3))
+        .attr('fill', d => WellViewApp.scales.color(d.value))
+        .attr('opacity', 1)
         .attr('cx', WellViewApp.viz.posPointX)
         .attr('cy', WellViewApp.viz.posPointY);
       points.exit().remove();
 
-      // --- Y-AXIS Line Rendering ---
       var yScale = WellViewApp.svg.selectAll('path.yScale').data(processedData[2]);
       yScale.enter()
         .append('path')
@@ -238,27 +193,25 @@ var WellViewApp = {
         .merge(yScale)
         .attr('stroke', 'black')
         .attr('stroke-width', 0.5)
-        .attr('d', WellViewApp.d3_3d.yScale3d.draw); // Uses yScale3d to draw the path.
+        .attr('d', WellViewApp.d3_3d.yScale3d.draw);
       yScale.exit().remove();
 
-      // --- Y-AXIS Text Labels Rendering ---
       var yText = WellViewApp.svg.selectAll('text.yText').data(processedData[2][0]);
       yText.enter()
         .append('text')
         .attr('class', '_3d yText')
         .attr('dx', '.3em')
         .merge(yText)
-        .each(d => { d.centroid = { x: d.rotated.x, y: d.rotated.y, z: d.rotated.z }; }) // Store rotated position for sorting.
+        .each(d => { d.centroid = { x: d.rotated.x, y: d.rotated.y, z: d.rotated.z }; })
         .attr('x', d => d.projected.x)
         .attr('y', d => d.projected.y)
-        .attr('stroke', (d,i,nodes) => (i === Math.floor((nodes.length -1) / 2) ? 'black' : '')) // Emphasize middle label.
+        .attr('stroke', (d,i,nodes) => (i === Math.floor((nodes.length -1) / 2) ? 'black' : ''))
         .text((d,i,nodes) => {
-          if (i === Math.floor((nodes.length-1) / 2)) return `[${WellViewApp.config.yCategory}]`; // Display category name.
-          return WellViewApp.scales.YScale.invert(d[1]).toFixed(2); // Display scaled value.
+          if (i === Math.floor((nodes.length-1) / 2)) return `[${WellViewApp.config.yCategory}]`;
+          return WellViewApp.scales.YScale.invert(d[1]).toFixed(2);
         });
       yText.exit().remove();
 
-      // --- X-AXIS Text Labels Rendering ---
       var xText = WellViewApp.svg.selectAll('text.xText').data(processedData[3][0]);
       xText.enter()
         .append('text')
@@ -270,13 +223,12 @@ var WellViewApp = {
         .attr('y', d => d.projected.y)
         .attr('stroke', (d,i,nodes) => (i === Math.floor((nodes.length-1) / 2) ? 'black' : ''))
         .text((d,i,nodes) => {
-          if (i === 0) return ""; // Skip first label (often origin).
+          if (i === 0) return "";
           if (i === Math.floor((nodes.length-1) / 2)) return `[${WellViewApp.config.xCategory}]`;
           return Math.round(WellViewApp.scales.XScale.invert(d[0]) * 100) / 100;
         });
       xText.exit().remove();
 
-      // --- Z-AXIS Text Labels Rendering ---
       var zText = WellViewApp.svg.selectAll('text.zText').data(processedData[4][0]);
       zText.enter()
         .append('text')
@@ -294,32 +246,23 @@ var WellViewApp = {
         });
       zText.exit().remove();
 
-      // Sorts all elements with class '_3d' to ensure correct Z-ordering for depth perception.
       d3.selectAll('._3d').sort(d3._3d().sort);
 
-      // --- LEGEND Rendering ---
-      // Uses d3.legendColor to create/update the color legend.
       var legendsvg = d3.select(".mainsvg");
-      legendsvg.select(".legendLinear").remove(); // Remove existing legend.
-      legendsvg.append("g") // Append a new group for the legend.
+      legendsvg.select(".legendLinear").remove();
+      legendsvg.append("g")
         .attr("class", "legendLinear")
-        .attr("transform", "translate(20,20)"); // Position the legend.
-
+        .attr("transform", "translate(20,20)");
       var legendLinear = d3.legendColor()
-        .shapeWidth(30)    // Width of legend color swatches.
-        .cells(10)         // Number of color cells in the legend.
-        .orient('vertical') // Orientation of the legend.
-        .title(WellViewApp.config.vCategory) // Title (current color variable).
-        .scale(WellViewApp.scales.color);    // The color scale to use.
-      legendsvg.select(".legendLinear").call(legendLinear); // Render the legend.
+        .shapeWidth(30)
+        .cells(10)
+        .orient('vertical')
+        .title(WellViewApp.config.vCategory)
+        .scale(WellViewApp.scales.color);
+      legendsvg.select(".legendLinear").call(legendLinear);
     },
-
-    // Helper function to get the X-coordinate for a projected point.
     posPointX: function(d) { return d.projected.x || ""; },
-    // Helper function to get the Y-coordinate for a projected point.
-    posPointY: function(d) { return d.projected.y || ""; }, // Should always have a Y.
-
-    // --- Drag Event Handlers ---
+    posPointY: function(d) { return d.projected.y || ""; },
     dragStart: function() {
       WellViewApp.mx = d3.event.x;
       WellViewApp.my = d3.event.y;
@@ -327,46 +270,39 @@ var WellViewApp = {
     dragged: function() {
       WellViewApp.mouseX = WellViewApp.mouseX || 0;
       WellViewApp.mouseY = WellViewApp.mouseY || 0;
-      // Calculate rotation angles based on mouse movement.
       var beta = (d3.event.x - WellViewApp.mx + WellViewApp.mouseX) * Math.PI / 230 * (-1);
       var alpha = (d3.event.y - WellViewApp.my + WellViewApp.mouseY) * Math.PI / 230 * (-1);
-
-      // Prepare data for re-rendering with new rotations.
       var data = [
-        WellViewApp.d3_3d.grid3d.rotateY(beta + WellViewApp.startAngleY).rotateX(alpha - WellViewApp.startAngleX)(WellViewApp.viz.dataForDrawing.xGrid),
+        WellViewApp.d3_3d.grid3d.rotateY(beta + WellViewApp.startAngleY).rotateX(alpha - WellViewApp.startAngleX)(/*WellViewApp.viz.dataForDrawing.xGrid*/), // Grid data is generated by grid3d()
         WellViewApp.d3_3d.point3d.rotateY(beta + WellViewApp.startAngleY).rotateX(alpha - WellViewApp.startAngleX)(WellViewApp.viz.dataForDrawing.scatter),
         WellViewApp.d3_3d.yScale3d.rotateY(beta + WellViewApp.startAngleY).rotateX(alpha - WellViewApp.startAngleX)([WellViewApp.viz.dataForDrawing.yLine]),
         WellViewApp.d3_3d.yScale3d.rotateY(beta + WellViewApp.startAngleY).rotateX(alpha - WellViewApp.startAngleX)([WellViewApp.viz.dataForDrawing.xLine]),
         WellViewApp.d3_3d.yScale3d.rotateY(beta + WellViewApp.startAngleY).rotateX(alpha - WellViewApp.startAngleX)([WellViewApp.viz.dataForDrawing.zLine])
       ];
-      WellViewApp.viz.processData(data, 0); // Re-render with no transition delay.
+      WellViewApp.viz.processData(data, 0);
     },
     dragEnd: function() {
-      // Store the final mouse position for the next drag operation.
       WellViewApp.mouseX = d3.event.x - WellViewApp.mx + WellViewApp.mouseX;
       WellViewApp.mouseY = d3.event.y - WellViewApp.my + WellViewApp.mouseY;
     },
-    // Optimized function to update only point radii when well focus changes.
     updatePointRadii: function() {
-        if (!WellViewApp.svg) return; // Ensure SVG is initialized
+        if (!WellViewApp.svg) return;
         WellViewApp.svg.selectAll('circle._3d')
-            .transition().duration(200) // Short transition for visual feedback
+            .transition().duration(200)
             .attr('r', function(d) {
-                return d.wellID === WellViewApp.wellIDFocus ? 6 : 3; // Larger radius for focused well
+                return d.wellID === WellViewApp.wellIDFocus ? 6 : 3;
             });
     }
   },
 
-  // --- UI Interaction / Event Handlers ---
   ui: {
     updateV: function() {
       WellViewApp.config.vCategory = this.value;
-      WellViewApp.initVisualization(); // Full re-render for color change
+      WellViewApp.initVisualization();
     },
     updateX: function() {
       WellViewApp.config.xCategory = this.value;
-      WellViewApp.crossfilterModule.buildCrossFilters(); // Rebuild filters for new axis
-      // initVisualization is called by buildCrossFilters -> renderCharts
+      WellViewApp.crossfilterModule.buildCrossFilters();
     },
     updateY: function() {
       WellViewApp.config.yCategory = this.value;
@@ -378,62 +314,57 @@ var WellViewApp = {
     },
     updateWellFocus: function() {
       WellViewApp.wellIDFocus = this.value;
-      WellViewApp.viz.updatePointRadii(); // Optimized: only update radii
+      WellViewApp.viz.updatePointRadii();
     },
-    sliderInputHandler: function() {
-      WellViewApp.ui.setScale(this.value / 2);
-      // setOriginX/Y also call initVisualization.
-      // For pure scale changes, a lighter refresh might be possible if extents don't change.
-      WellViewApp.initVisualization(); // Currently, full re-render.
+    // Renamed from sliderInputHandler and corrected to use stored DOM element
+    handleSliderChange: function() {
+      if (this.sliderDOMElement && typeof this.sliderDOMElement.value !== 'undefined') {
+          this.setScale(this.sliderDOMElement.value / 2);
+          WellViewApp.initVisualization();
+      } else {
+          console.error("Slider DOM element (this.sliderDOMElement) is not properly defined or has no value in handleSliderChange.", this.sliderDOMElement);
+      }
     },
     keydownHandler: function(e) {
       switch (e.keyCode) {
-        case 37: WellViewApp.ui.setOriginX(--WellViewApp.origin[0]); break; // Left arrow
-        case 38: WellViewApp.ui.setOriginY(--WellViewApp.origin[1]); break; // Up arrow
-        case 39: WellViewApp.ui.setOriginX(++WellViewApp.origin[0]); break; // Right arrow
-        case 40: WellViewApp.ui.setOriginY(++WellViewApp.origin[1]); break; // Down arrow
+        case 37: WellViewApp.ui.setOriginX(--WellViewApp.origin[0]); break;
+        case 38: WellViewApp.ui.setOriginY(--WellViewApp.origin[1]); break;
+        case 39: WellViewApp.ui.setOriginX(++WellViewApp.origin[0]); break;
+        case 40: WellViewApp.ui.setOriginY(++WellViewApp.origin[1]); break;
       }
     },
-    setScale: function(scale) {
-      WellViewApp.scale = scale;
-      // Update scale on all 3D objects.
-      WellViewApp.d3_3d.grid3d.scale(scale);
-      WellViewApp.d3_3d.point3d.scale(scale);
-      WellViewApp.d3_3d.yScale3d.scale(scale);
-      // Note: initVisualization() will be called by sliderInputHandler after this.
+    setScale: function(scaleVal) {
+      WellViewApp.scale = scaleVal;
+      if(WellViewApp.d3_3d.grid3d) WellViewApp.d3_3d.grid3d.scale(scaleVal);
+      if(WellViewApp.d3_3d.point3d) WellViewApp.d3_3d.point3d.scale(scaleVal);
+      if(WellViewApp.d3_3d.yScale3d) WellViewApp.d3_3d.yScale3d.scale(scaleVal);
     },
     setOriginX: function(originX) {
       WellViewApp.origin[0] = originX;
       WellViewApp.d3_3d.grid3d.origin(WellViewApp.origin);
       WellViewApp.d3_3d.point3d.origin(WellViewApp.origin);
       WellViewApp.d3_3d.yScale3d.origin(WellViewApp.origin);
-      WellViewApp.initVisualization(); // Re-render with new origin.
+      WellViewApp.initVisualization();
     },
     setOriginY: function(originY) {
       WellViewApp.origin[1] = originY;
       WellViewApp.d3_3d.grid3d.origin(WellViewApp.origin);
       WellViewApp.d3_3d.point3d.origin(WellViewApp.origin);
       WellViewApp.d3_3d.yScale3d.origin(WellViewApp.origin);
-      WellViewApp.initVisualization(); // Re-render with new origin.
+      WellViewApp.initVisualization();
     }
   },
 
-  // --- Crossfilter Logic ---
-  // Manages data filtering and coordination between charts.
   crossfilterModule: {
-    wellCrossfilter: null, // The main Crossfilter instance.
-    xDimension: null, yDimension: null, zDimension: null, // Dimensions for each category.
-
-    // Utility function to determine group bins for Crossfilter dimensions.
+    wellCrossfilter: null,
+    xDimension: null, yDimension: null, zDimension: null,
     groupSize: function(d, extent) {
-      if (!extent || extent[0] === undefined || extent[1] === undefined || extent[0] === extent[1]) return d; // Avoid division by zero or NaN
-      var binsize = Math.abs(extent[1] - extent[0]) / 100.0; // Aim for roughly 100 bins.
-      return Math.floor(d / binsize) * binsize; // Snap value to the bin.
+      if (!extent || extent[0] === undefined || extent[1] === undefined || extent[0] === extent[1]) return d;
+      var binsize = Math.abs(extent[1] - extent[0]) / 100.0;
+      return Math.floor(d / binsize) * binsize;
     },
-
-    // Builds or rebuilds Crossfilter dimensions, groups, and associated charts.
     buildCrossFilters: function() {
-      if (!this.wellCrossfilter) { // Ensure wellCrossfilter is initialized
+      if (!this.wellCrossfilter) {
           if (WellViewApp.data.allWells.length > 0) {
               this.wellCrossfilter = crossfilter(WellViewApp.data.allWells);
           } else {
@@ -441,54 +372,43 @@ var WellViewApp = {
               return;
           }
       }
-      // Dispose of existing dimensions to prevent memory leaks.
       if (this.xDimension) this.xDimension.dispose();
       if (this.yDimension) this.yDimension.dispose();
       if (this.zDimension) this.zDimension.dispose();
 
-      const formatNumber = d3.format(',d'); // D3 formatter for counts.
-
-      // Calculate extents for current categories. Used for chart scale domains.
+      const formatNumber = d3.format(',d');
       var XExtent = d3.extent(WellViewApp.data.allWells, d => parseFloat(d[WellViewApp.config.xCategory]));
       var YExtent = d3.extent(WellViewApp.data.allWells, d => parseFloat(d[WellViewApp.config.yCategory]));
       var ZExtent = d3.extent(WellViewApp.data.allWells, d => parseFloat(d[WellViewApp.config.zCategory]));
-      if (!XExtent[0] || !XExtent[1]) XExtent = [0,1]; // Default if extent is invalid
-      if (!YExtent[0] || !YExtent[1]) YExtent = [0,1];
-      if (!ZExtent[0] || !ZExtent[1]) ZExtent = [0,1];
+      if ((!XExtent[0] && XExtent[0]!==0) || (!XExtent[1] && XExtent[1]!==0)) XExtent = [0,1];
+      if ((!YExtent[0] && YExtent[0]!==0) || (!YExtent[1] && YExtent[1]!==0)) YExtent = [0,1];
+      if ((!ZExtent[0] && ZExtent[0]!==0) || (!ZExtent[1] && ZExtent[1]!==0)) ZExtent = [0,1];
 
-      const all = this.wellCrossfilter.groupAll(); // Group for counting all records.
-
-      // Create dimensions and groups for each category.
+      const all = this.wellCrossfilter.groupAll();
       this.xDimension = this.wellCrossfilter.dimension(d => parseFloat(d[WellViewApp.config.xCategory]));
       const xGroup = this.xDimension.group(d => this.groupSize(d, XExtent));
-
       this.yDimension = this.wellCrossfilter.dimension(d => parseFloat(d[WellViewApp.config.yCategory]));
       const yGroup = this.yDimension.group(d => this.groupSize(d, YExtent));
-
       this.zDimension = this.wellCrossfilter.dimension(d => parseFloat(d[WellViewApp.config.zCategory]));
       const zGroup = this.zDimension.group(d => this.groupSize(d, ZExtent));
 
-      // Define chart configurations.
       var charts = [
         this.barChart().title(WellViewApp.config.xCategory).dimension(this.xDimension).group(xGroup).x(d3.scaleLinear().domain(XExtent).rangeRound([0, 250])),
         this.barChart().title(WellViewApp.config.yCategory).dimension(this.yDimension).group(yGroup).x(d3.scaleLinear().domain(YExtent).rangeRound([0, 250])),
         this.barChart().title(WellViewApp.config.zCategory).dimension(this.zDimension).group(zGroup).x(d3.scaleLinear().domain(ZExtent).rangeRound([0, 250]))
       ];
+      const chartElements = d3.selectAll('.chart').data(charts);
+      d3.selectAll('#total').text(formatNumber(this.wellCrossfilter.size()));
 
-      const chartElements = d3.selectAll('.chart').data(charts); // Bind charts to DOM.
-      d3.selectAll('#total').text(formatNumber(this.wellCrossfilter.size())); // Update total count.
-
-      // Function to render all charts and update visualization.
       this.renderCharts = function() {
         chartElements.each(function(chart) { d3.select(this).call(chart); });
-        d3.select('#active').text(formatNumber(all.value())); // Update active count.
-        WellViewApp.data.wells = this.xDimension.top(Infinity); // Update filtered data.
-        WellViewApp.initVisualization(); // Re-render 3D plot.
-      }.bind(this); // Bind `this` context for renderCharts.
+        d3.select('#active').text(formatNumber(all.value()));
+        WellViewApp.data.wells = this.xDimension.top(Infinity);
+        WellViewApp.initVisualization();
+      }.bind(this);
 
-      this.renderCharts(); // Initial render.
+      this.renderCharts();
 
-      // Expose filter and reset globally for chart interactions.
       window.filter = (filters) => {
         filters.forEach((d, i) => { charts[i].filter(d); });
         this.renderCharts();
@@ -498,10 +418,7 @@ var WellViewApp = {
         this.renderCharts();
       };
     },
-    // Reusable bar chart component (factory function).
-    // Detailed comments for this function are extensive and placed below its definition.
     barChart: function() {
-        // (barChart implementation as previously defined with comments)
         if (!this.barChart.id) this.barChart.id = 0;
         let margin = {top: 10, right: 13, bottom: 20, left: 10},
             x,
@@ -647,37 +564,30 @@ var WellViewApp = {
     }
   },
 
-  // --- Main Visualization Setup ---
-  // Initializes and prepares data for the 3D scatter plot.
   initVisualization: function() {
-    var cnt = 0; // Counter for point IDs.
-    // Clear existing data arrays.
-    this.viz.dataForDrawing.xGrid = [];
+    var cnt = 0;
+    this.viz.dataForDrawing.xGrid = []; // This is not used if grid3d() generates its own data.
     this.viz.dataForDrawing.scatter = [];
     this.viz.dataForDrawing.yLine = [];
     this.viz.dataForDrawing.xLine = [];
     this.viz.dataForDrawing.zLine = [];
 
-    // Calculate data extents for current categories.
     var ZExtent = d3.extent(this.data.wells, d => parseFloat(d[this.config.zCategory]));
     var XExtent = d3.extent(this.data.wells, d => parseFloat(d[this.config.xCategory]));
     var YExtent = d3.extent(this.data.wells, d => parseFloat(d[this.config.yCategory]));
     var VExtent = d3.extent(this.data.wells, d => parseFloat(d[this.config.vCategory]));
-    // Default extents if data is empty or invalid.
-    if (!ZExtent[0] || !ZExtent[1]) ZExtent = [0,1];
-    if (!XExtent[0] || !XExtent[1]) XExtent = [0,1];
-    if (!YExtent[0] || !YExtent[1]) YExtent = [0,1];
-    if (!VExtent[0] || !VExtent[1]) VExtent = [0,1];
+    if ((!ZExtent[0] && ZExtent[0]!==0) || (!ZExtent[1] && ZExtent[1]!==0)) ZExtent = [0,1];
+    if ((!XExtent[0] && XExtent[0]!==0) || (!XExtent[1] && XExtent[1]!==0)) XExtent = [0,1];
+    if ((!YExtent[0] && YExtent[0]!==0) || (!YExtent[1] && YExtent[1]!==0)) YExtent = [0,1];
+    if ((!VExtent[0] && VExtent[0]!==0) || (!VExtent[1] && VExtent[1]!==0)) VExtent = [0,1];
 
-    // Update scale domains.
     this.scales.color.domain(VExtent);
     this.scales.ZScale.domain(ZExtent).nice();
     this.scales.XScale.domain(XExtent).nice();
-    // Special handling for Y-axis log scale.
     if (this.config.yCategory === "s2s3") {
       this.scales.YScale = d3.scaleLog().range([0, 100]);
       const yExtentLog = [...YExtent];
-      if (yExtentLog[0] <= 0) yExtentLog[0] = 0.01; // Clamp to small positive for log scale.
+      if (yExtentLog[0] <= 0) yExtentLog[0] = 0.01;
       if (yExtentLog[1] <= 0) yExtentLog[1] = 0.1;
       this.scales.YScale.domain(yExtentLog);
     } else {
@@ -685,7 +595,6 @@ var WellViewApp = {
       this.scales.YScale.domain(YExtent).nice();
     }
 
-    // Prepare scatter data with scaled coordinates.
     this.data.wells.forEach(d => {
       let yVal = parseFloat(d[this.config.yCategory]);
       if (this.config.yCategory === "s2s3" && yVal <= 0) yVal = 0.01;
@@ -694,43 +603,43 @@ var WellViewApp = {
         y: this.scales.YScale(yVal),
         z: this.scales.ZScale(parseFloat(d[this.config.zCategory])),
         id: 'point_' + cnt++,
-        value: parseFloat(d[this.config.vCategory]), // Ensure value is float for color scale
+        value: parseFloat(d[this.config.vCategory]),
         wellID: d.wellID
       });
     });
 
-    // Generate axis line data. The grid data is generated by the grid3d object itself.
-    // this.viz.dataForDrawing.xGrid = []; // No longer manually populated
+    // xGrid is generated by grid3d() directly
     d3.range(0, 101, 10).forEach(d => this.viz.dataForDrawing.yLine.push([0, d, 0]));
     d3.range(0, 101, 10).forEach(d => this.viz.dataForDrawing.xLine.push([d, 0, 0]));
     d3.range(0, 101, 10).forEach(d => this.viz.dataForDrawing.zLine.push([0, 0, d]));
 
-    // Prepare data for rendering (apply 3D transformations).
     var dataToRender = [
-      this.d3_3d.grid3d(), // Call grid3d as a function to generate grid data
+      this.d3_3d.grid3d(),
       this.d3_3d.point3d(this.viz.dataForDrawing.scatter),
       this.d3_3d.yScale3d([this.viz.dataForDrawing.yLine]),
       this.d3_3d.yScale3d([this.viz.dataForDrawing.xLine]),
       this.d3_3d.yScale3d([this.viz.dataForDrawing.zLine])
     ];
-    this.viz.processData(dataToRender, 1000); // Render with 1s transition.
+    this.viz.processData(dataToRender, 1000);
   },
 
-  // --- Application Start ---
-  // Initializes the application components and starts the visualization.
   start: function() {
-    this.viz.setupSVG();             // Setup main SVG area.
-    this.viz.initD33DObjects();      // Initialize D3 3D helper objects.
-    this.data.load(() => {           // Load data, then...
-      this.crossfilterModule.buildCrossFilters(); // Setup Crossfilter and charts.
-                                                // buildCrossFilters calls initVisualization internally.
-      // Setup UI event listeners.
+    this.viz.setupSVG();
+    this.viz.initD33DObjects();
+    this.data.load(() => {
+      this.crossfilterModule.buildCrossFilters();
       d3.select('#color').on('change', this.ui.updateV.bind(this.ui));
       d3.select('#xaxis').on('change', this.ui.updateX.bind(this.ui));
       d3.select('#yaxis').on('change', this.ui.updateY.bind(this.ui));
       d3.select('#zaxis').on('change', this.ui.updateZ.bind(this.ui));
       d3.select('#well').on('change', this.ui.updateWellFocus.bind(this.ui));
-      document.getElementById("myRange").oninput = this.ui.sliderInputHandler.bind(this.ui);
+
+      this.ui.sliderDOMElement = document.getElementById("myRange");
+      if (this.ui.sliderDOMElement) {
+          this.ui.sliderDOMElement.oninput = this.ui.handleSliderChange.bind(this.ui);
+      } else {
+          console.error("Slider DOM element #myRange not found during initialization.");
+      }
       document.onkeydown = this.ui.keydownHandler.bind(this.ui);
       const exportButton = document.getElementById("exportButton");
       if (exportButton) {
@@ -740,13 +649,11 @@ var WellViewApp = {
   }
 };
 
-// --- Global Functions (Legacy, to be fully integrated or removed) ---
-// These are currently referenced by HTML or the bar chart's reset functionality.
-// Consider refactoring them into the WellViewApp structure if possible.
-var wellCrossfilter = WellViewApp.crossfilterModule.wellCrossfilter; // For barChart reset.
-var xDimension = WellViewApp.crossfilterModule.xDimension;
-var yDimension = WellViewApp.crossfilterModule.yDimension;
-var zDimension = WellViewApp.crossfilterModule.zDimension;
+document.addEventListener('DOMContentLoaded', function() {
+  WellViewApp.start();
+});
+
+// Legacy variable shims
 var origin = WellViewApp.origin;
 var scale = WellViewApp.scale;
 var key = WellViewApp.key;
@@ -756,20 +663,24 @@ var wellIDFocus = WellViewApp.wellIDFocus;
 var ZScale = WellViewApp.scales.ZScale;
 var XScale = WellViewApp.scales.XScale;
 var YScale = WellViewApp.scales.YScale;
-var svg = WellViewApp.svg; // This will be null until setupSVG is called.
-var color = WellViewApp.scales.color; // Also null until initD33DObjects.
+// var svg = WellViewApp.svg; // Initialized later
+// var color = WellViewApp.scales.color; // Initialized later
 var zCategory = WellViewApp.config.zCategory;
 var xCategory = WellViewApp.config.xCategory;
 var yCategory = WellViewApp.config.yCategory;
 var vCategory = WellViewApp.config.vCategory;
-var mx = WellViewApp.mx, my = WellViewApp.my, mouseX = WellViewApp.mouseX, mouseY = WellViewApp.mouseY;
-var grid3d = WellViewApp.d3_3d.grid3d;
-var point3d = WellViewApp.d3_3d.point3d;
-var yScale3d = WellViewApp.d3_3d.yScale3d;
-var wells = WellViewApp.data.wells;
-var allWells = WellViewApp.data.allWells;
+// var mx = WellViewApp.mx, my = WellViewApp.my, mouseX = WellViewApp.mouseX, mouseY = WellViewApp.mouseY; // Handled within WellViewApp
+// var grid3d = WellViewApp.d3_3d.grid3d; // Initialized later
+// var point3d = WellViewApp.d3_3d.point3d; // Initialized later
+// var yScale3d = WellViewApp.d3_3d.yScale3d; // Initialized later
+// var wells = WellViewApp.data.wells; // Handled within WellViewApp
+// var allWells = WellViewApp.data.allWells; // Handled within WellViewApp
+// var wellCrossfilter = WellViewApp.crossfilterModule.wellCrossfilter; // Handled within WellViewApp
+// var xDimension = WellViewApp.crossfilterModule.xDimension; // Handled within WellViewApp
+// var yDimension = WellViewApp.crossfilterModule.yDimension; // Handled within WellViewApp
+// var zDimension = WellViewApp.crossfilterModule.zDimension; // Handled within WellViewApp
 
-// Shim for old function names if directly called from HTML or legacy parts.
+// Shim for old function names
 function processData(data, tt) { WellViewApp.viz.processData(data, tt); }
 function posPointX(d) { return WellViewApp.viz.posPointX(d); }
 function posPointY(d) { return WellViewApp.viz.posPointY(d); }
@@ -779,28 +690,9 @@ function dragStart() { WellViewApp.viz.dragStart(); }
 function dragEnd() { WellViewApp.viz.dragEnd(); }
 function buildCrossFilters() { WellViewApp.crossfilterModule.buildCrossFilters(); }
 function groupSize(d, extent) { return WellViewApp.crossfilterModule.groupSize(d, extent); }
-// exportData and exportToCsv are on WellViewApp.data, event listener is set up in start()
-
-// Start the application once the DOM is ready.
-document.addEventListener('DOMContentLoaded', function() {
-  WellViewApp.start();
-});
-
-// Legacy slider and keydown handlers (should be fully managed by WellViewApp.ui)
-// var slider = document.getElementById("myRange");
-// slider.oninput = ... // now WellViewApp.ui.sliderInputHandler
-// document.onkeydown = ... // now WellViewApp.ui.keydownHandler
-
-// Legacy d3.csv loading (now in WellViewApp.data.load)
-/*
-d3.csv("data.csv", function(data) { ... });
-*/
-
-// Legacy barChart (now WellViewApp.crossfilterModule.barChart)
-/*
-function barChart() { ... }
-*/
-
+>>>>>>> REPLACE
+wellview.js
+<<<<<<< SEARCH
   // Update the current slider value (each time you drag the slider handle)
   slider.oninput = function() {
     setScale(this.value / 2);
@@ -1279,3 +1171,9 @@ function barChart() { ... }
       }
     }
   }
+=======
+// The following lines that define global variables like `slider` and `document.onkeydown`
+// are effectively replaced by the event listener setup in `WellViewApp.start()`.
+// Their logic is now encapsulated within `WellViewApp.ui` methods.
+// We remove these legacy global handlers.
+>>>>>>> REPLACE
